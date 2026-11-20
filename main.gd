@@ -18,7 +18,6 @@ var selected_type := ""
 var game_over := false
 var victory := false
 var elapsed := 0.0
-var ram_timer := 0.0
 var spawn_timer := 3.0
 var spawn_index := 0
 
@@ -32,26 +31,28 @@ func _process(delta: float) -> void:
 	if game_over:
 		return
 	elapsed += delta
-	ram_timer += delta
 	spawn_timer -= delta
-	if ram_timer >= 15.0:
-		ram_timer -= 15.0
-		ram = min(999, ram + 25)
 	if spawn_timer <= 0.0:
 		spawn_enemy()
 		spawn_index += 1
 		spawn_timer = max(0.8, 2.8 - elapsed * 0.018)
 
 	for defender in defenders:
+		if defender["type"] == "ram":
+			defender["produce_timer"] -= delta
+			if defender["produce_timer"] <= 0.0:
+				ram = min(999, ram + 25)
+				defender["produce_timer"] += 15.0
 		defender["cooldown"] -= delta
-		var lane_has_enemy := false
-		for enemy in enemies:
-			if int(enemy["lane"]) == int(defender["lane"]) and enemy["x"] > defender["x"]:
-				lane_has_enemy = true
-				break
-		if lane_has_enemy and defender["cooldown"] <= 0.0:
-			defender["cooldown"] = 1.0
-			projectiles.append({"x": defender["x"] + 24.0, "y": defender["y"], "lane": defender["lane"], "damage": 20.0})
+		if defender["type"] == "compiler":
+			var lane_has_enemy := false
+			for enemy in enemies:
+				if int(enemy["lane"]) == int(defender["lane"]) and enemy["x"] > defender["x"]:
+					lane_has_enemy = true
+					break
+			if lane_has_enemy and defender["cooldown"] <= 0.0:
+				defender["cooldown"] = 1.0
+				projectiles.append({"x": defender["x"] + 24.0, "y": defender["y"], "lane": defender["lane"], "damage": 20.0})
 
 	for i in range(projectiles.size() - 1, -1, -1):
 		var projectile = projectiles[i]
@@ -120,6 +121,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			if mouse.y >= 225.0 and mouse.y <= 315.0:
 				selected_type = "firewall"
 				return
+			if mouse.y >= 330.0 and mouse.y <= 420.0:
+				selected_type = "ram"
+				return
 		if selected_type == "":
 			return
 		var col := int(floor((mouse.x - GRID_LEFT) / CELL_W))
@@ -132,7 +136,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		ram -= UNIT_COST
 		var x := GRID_LEFT + col * CELL_W + CELL_W * 0.5
 		var y := GRID_TOP + row * CELL_H + CELL_H * 0.5
-		defenders.append({"x": x, "y": y, "lane": row, "col": col, "type": selected_type, "health": 100.0, "cooldown": 0.2})
+		defenders.append({"x": x, "y": y, "lane": row, "col": col, "type": selected_type, "health": 100.0, "cooldown": 0.2, "produce_timer": 15.0})
 		cells[row][col] = selected_type
 		selected_type = ""
 
@@ -151,7 +155,6 @@ func _restart() -> void:
 	game_over = false
 	victory = false
 	elapsed = 0.0
-	ram_timer = 0.0
 	spawn_timer = 3.0
 	spawn_index = 0
 
@@ -171,14 +174,18 @@ func _draw() -> void:
 	draw_string(ThemeDB.fallback_font, Vector2(480, 50), "SURVIVE: %.0f / 75s" % elapsed, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("ffcf70"))
 	_draw_card(20, 120, "COMPILER", 50, Color("55b9ff"), selected_type == "compiler")
 	_draw_card(20, 225, "FIREWALL", 50, Color("f49b55"), selected_type == "firewall")
+	_draw_card(20, 330, "RAM", 50, Color("70e5ff"), selected_type == "ram")
 
 	for defender in defenders:
 		if defender["type"] == "compiler":
 			draw_circle(Vector2(defender["x"], defender["y"]), 28.0, Color("55b9ff"))
 			draw_string(ThemeDB.fallback_font, Vector2(defender["x"] - 22.0, defender["y"] + 7.0), "</>", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("10253a"))
-		else:
+		elif defender["type"] == "firewall":
 			draw_rect(Rect2(defender["x"] - 27.0, defender["y"] - 27.0, 54.0, 54.0), Color("f49b55"))
 			draw_string(ThemeDB.fallback_font, Vector2(defender["x"] - 18.0, defender["y"] + 7.0), "DEF", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("40220d"))
+		else:
+			draw_rect(Rect2(defender["x"] - 27.0, defender["y"] - 27.0, 54.0, 54.0), Color("70e5ff"))
+			draw_string(ThemeDB.fallback_font, Vector2(defender["x"] - 19.0, defender["y"] + 6.0), "RAM", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("10253a"))
 		_draw_health_bar(defender["x"], defender["y"] - 38.0, defender["health"] / 100.0)
 	for enemy in enemies:
 		draw_circle(Vector2(enemy["x"], GRID_TOP + enemy["lane"] * CELL_H + CELL_H * 0.5), 30.0, Color("ec6071"))
