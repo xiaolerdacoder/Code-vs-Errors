@@ -31,15 +31,12 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if game_over:
 		return
-
 	elapsed += delta
 	ram_timer += delta
 	spawn_timer -= delta
-
-	if ram_timer >= 10.0:
-		ram_timer -= 10.0
-		ram = min(999, ram + 50)
-
+	if ram_timer >= 15.0:
+		ram_timer -= 15.0
+		ram = min(999, ram + 25)
 	if spawn_timer <= 0.0:
 		spawn_enemy()
 		spawn_index += 1
@@ -79,7 +76,6 @@ func _process(delta: float) -> void:
 		var enemy = enemies[i]
 		enemy["attack_timer"] -= delta
 		var enemy_attacking := false
-
 		for j in range(defenders.size() - 1, -1, -1):
 			var defender = defenders[j]
 			if int(defender["lane"]) == int(enemy["lane"]) and abs(defender["x"] - enemy["x"]) < 42.0:
@@ -91,10 +87,8 @@ func _process(delta: float) -> void:
 						cells[defender["lane"]][defender["col"]] = null
 						defenders.remove_at(j)
 				break
-
 		if not enemy_attacking:
 			enemy["x"] -= enemy["speed"] * delta
-
 		if enemy["x"] < 105.0:
 			enemies.remove_at(i)
 			game_over = true
@@ -102,7 +96,6 @@ func _process(delta: float) -> void:
 	if elapsed >= 75.0:
 		victory = true
 		game_over = true
-
 	queue_redraw()
 
 func spawn_enemy() -> void:
@@ -119,9 +112,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		if event.button_index != MOUSE_BUTTON_LEFT:
 			return
-
 		var mouse: Vector2 = event.position
-
 		if mouse.x >= 20.0 and mouse.x <= 120.0:
 			if mouse.y >= 120.0 and mouse.y <= 210.0:
 				selected_type = "compiler"
@@ -129,21 +120,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			if mouse.y >= 225.0 and mouse.y <= 315.0:
 				selected_type = "firewall"
 				return
-
 		if selected_type == "":
 			return
-
 		var col := int(floor((mouse.x - GRID_LEFT) / CELL_W))
 		var row := int(floor((mouse.y - GRID_TOP) / CELL_H))
-		if row < 0 or row >= ROWS or col < 0 or col >= COLS:
+		if row < 0 or row >= ROWS or col < 0 or col >= COLS or cells[row][col] != null:
 			return
-		if cells[row][col] != null:
-			return
-
 		const UNIT_COST := 50
 		if ram < UNIT_COST:
 			return
-
 		ram -= UNIT_COST
 		var x := GRID_LEFT + col * CELL_W + CELL_W * 0.5
 		var y := GRID_TOP + row * CELL_H + CELL_H * 0.5
@@ -173,7 +158,6 @@ func _restart() -> void:
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, Vector2(1280, 720)), Color("101827"))
 	draw_rect(Rect2(Vector2(0, 80), Vector2(1280, 560)), Color("18324a"))
-
 	for row in ROWS:
 		for col in COLS:
 			var rect := Rect2(GRID_LEFT + col * CELL_W, GRID_TOP + row * CELL_H, CELL_W, CELL_H)
@@ -185,7 +169,6 @@ func _draw() -> void:
 	draw_string(ThemeDB.fallback_font, Vector2(35, 51), "RAM: %d GB" % ram, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("70e5ff"))
 	draw_string(ThemeDB.fallback_font, Vector2(250, 50), "SCORE: %d" % score, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color.WHITE)
 	draw_string(ThemeDB.fallback_font, Vector2(480, 50), "SURVIVE: %.0f / 75s" % elapsed, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("ffcf70"))
-
 	_draw_card(20, 120, "COMPILER", 50, Color("55b9ff"), selected_type == "compiler")
 	_draw_card(20, 225, "FIREWALL", 50, Color("f49b55"), selected_type == "firewall")
 
@@ -197,15 +180,12 @@ func _draw() -> void:
 			draw_rect(Rect2(defender["x"] - 27.0, defender["y"] - 27.0, 54.0, 54.0), Color("f49b55"))
 			draw_string(ThemeDB.fallback_font, Vector2(defender["x"] - 18.0, defender["y"] + 7.0), "DEF", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("40220d"))
 		_draw_health_bar(defender["x"], defender["y"] - 38.0, defender["health"] / 100.0)
-
 	for enemy in enemies:
 		draw_circle(Vector2(enemy["x"], GRID_TOP + enemy["lane"] * CELL_H + CELL_H * 0.5), 30.0, Color("ec6071"))
 		draw_string(ThemeDB.fallback_font, Vector2(enemy["x"] - 23.0, GRID_TOP + enemy["lane"] * CELL_H + 57.0), "BUG", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color.WHITE)
 		_draw_health_bar(enemy["x"], GRID_TOP + enemy["lane"] * CELL_H + 10.0, enemy["health"] / enemy["max_health"])
-
 	for projectile in projectiles:
 		draw_circle(Vector2(projectile["x"], GRID_TOP + projectile["lane"] * CELL_H + CELL_H * 0.5), 7.0, Color("f2f7aa"))
-
 	if game_over:
 		draw_rect(Rect2(390, 260, 500, 200), Color("101827", 0.94))
 		var title := "SYSTEM SECURED!" if victory else "SYSTEM CRASHED"
