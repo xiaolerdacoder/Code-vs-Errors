@@ -7,7 +7,7 @@
 <style>
   :root { color-scheme: dark; font-family: system-ui, Segoe UI, sans-serif; }
   * { box-sizing: border-box; }
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 18px; background: #0c1420; color: #eaf3ff; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 18px; background: #070d16; color: #eaf3ff; }
   main { width: min(100%, 1000px); }
   h1 { margin: 0 0 8px; color: #70e5ff; font-size: clamp(1.4rem, 3vw, 2rem); }
   p { color: #bac9d9; margin: 0 0 12px; }
@@ -18,148 +18,185 @@
 <body>
 <main>
   <h1>Code vs Errors</h1>
-  <p>Defend your codebase! Choose a unit card, then click an empty tile to place it.</p>
+  <p>Build your defenses on the motherboard. Place RAM code to generate GB, then stop every bug!</p>
   <canvas id="game" width="1280" height="720" aria-label="Code vs Errors game"></canvas>
-  <p class="hint">Compilers shoot bugs; Firewalls block them. Place RAM code to generate 25 GB every 15 seconds. RAM is the only way to earn GB. Survive 75 seconds to win.</p>
+  <p class="hint">First bugs arrive after 30 seconds. Defeat 40 bugs to secure the PC. Watch for huge waves! Choose a codelet, then tap an empty motherboard tile.</p>
 </main>
 <script>
 (() => {
   'use strict';
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
+  const canvas = document.getElementById('game'), ctx = canvas.getContext('2d');
   const ROWS = 5, COLS = 9, LEFT = 250, TOP = 120, CW = 105, CH = 100;
-  let board, defenders, enemies, shots, ram, score, selected, elapsed, spawnTimer, ended, won, lastTime;
+  const GOAL = 40, TYPES = ['compiler', 'firewall', 'ram', 'antivirus', 'patch'];
+  const CARDS = [
+    {type:'compiler', name:'COMPILER', cost:50, color:'#55b9ff', y:110},
+    {type:'firewall', name:'FIREWALL', cost:50, color:'#f49b55', y:205},
+    {type:'ram', name:'RAM CODE', cost:50, color:'#70e5ff', y:300},
+    {type:'antivirus', name:'ANTIVIRUS', cost:75, color:'#8de072', y:395},
+    {type:'patch', name:'PATCH', cost:50, color:'#d58bff', y:490}
+  ];
+  let board, units, bugs, shots, ram, kills, selected, spawnTimer, spawnCount, waveRemaining, waveIndex, ended, won, lastTime, message, messageTimer;
 
   function reset() {
-    board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
-    defenders = []; enemies = []; shots = [];
-    ram = 50; score = 0; selected = null; elapsed = 0; spawnTimer = 3;
-    ended = false; won = false; lastTime = performance.now();
+    board = Array.from({length:ROWS}, () => Array(COLS).fill(null));
+    units = []; bugs = []; shots = []; ram = 50; kills = 0; selected = null;
+    spawnTimer = 30; spawnCount = 0; waveRemaining = 0; waveIndex = 0;
+    ended = false; won = false; message = 'FIRST BUGS IN 30s — DEPLOY RAM CODE!'; messageTimer = 5;
+    lastTime = performance.now();
   }
-  function spawnEnemy() {
+  function spawnBug() {
+    if (spawnCount >= GOAL) return;
     const lane = Math.floor(Math.random() * ROWS);
-    const hp = 100 + elapsed * 1.2;
-    enemies.push({x: 1250, lane, hp, maxHp: hp, speed: 12 + elapsed * .05, attack: 0});
+    const kind = spawnCount % 11 === 7 ? 'trojan' : (spawnCount % 5 === 3 ? 'spam' : (spawnCount % 7 === 5 ? 'glitch' : 'bug'));
+    const specs = {
+      bug: {hp:100, speed:17, damage:18, color:'#ec6071', label:'BUG', radius:24},
+      spam: {hp:65, speed:29, damage:12, color:'#ffc857', label:'SPAM', radius:20},
+      trojan: {hp:190, speed:10, damage:28, color:'#b96cff', label:'TROJAN', radius:27},
+      glitch: {hp:125, speed:21, damage:20, color:'#ff4f8b', label:'GLITCH', radius:23}
+    }[kind];
+    bugs.push({x:1245, lane, kind, hp:spec.hp, maxHp:spec.hp, speed:spec.speed, damage:spec.damage, color:spec.color, label:spec.label, radius:spec.radius, attack:0});
+    spawnCount++;
   }
   function update(dt) {
     if (ended) return;
-    elapsed += dt; spawnTimer -= dt;
-    if (spawnTimer <= 0) { spawnEnemy(); spawnTimer = Math.max(.8, 2.8 - elapsed * .018); }
-
-    for (const d of defenders) {
-      if (d.type === 'ram') {
-        d.produceTimer -= dt;
-        if (d.produceTimer <= 0) { ram = Math.min(999, ram + 25); d.produceTimer += 15; }
-      }
-      d.cooldown -= dt;
-      if (d.type === 'compiler' && d.cooldown <= 0 && enemies.some(e => e.lane === d.lane && e.x > d.x)) {
-        d.cooldown = 1;
-        shots.push({x: d.x + 24, lane: d.lane, damage: 20});
-      }
-    }
-    for (let i = shots.length - 1; i >= 0; i--) {
-      const s = shots[i]; s.x += 280 * dt;
-      const j = enemies.findIndex(e => e.lane === s.lane && Math.abs(e.x - s.x) < 25);
-      if (j >= 0) {
-        enemies[j].hp -= s.damage; shots.splice(i, 1);
-        if (enemies[j].hp <= 0) { enemies.splice(j, 1); score += 100; }
-      } else if (s.x > 1280) shots.splice(i, 1);
-    }
-    for (let i = enemies.length - 1; i >= 0; i--) {
-      const e = enemies[i]; e.attack -= dt;
-      const d = defenders.find(unit => unit.lane === e.lane && Math.abs(unit.x - e.x) < 42);
-      if (d) {
-        if (e.attack <= 0) {
-          e.attack = .9; d.hp -= 18;
-          if (d.hp <= 0) { board[d.lane][d.col] = null; defenders.splice(defenders.indexOf(d), 1); }
+    messageTimer = Math.max(0, messageTimer - dt);
+    if (spawnCount < GOAL) {
+      spawnTimer -= dt;
+      if (spawnTimer <= 0) {
+        if (waveRemaining > 0) {
+          spawnBug(); waveRemaining--;
+          spawnTimer = waveRemaining > 0 ? .52 : 3.2;
+        } else {
+          spawnBug();
+          if (spawnCount === 8 || spawnCount === 18 || spawnCount === 28) {
+            waveRemaining = Math.min(5, GOAL - spawnCount);
+            waveIndex++;
+            message = `HUGE WAVE ${waveIndex}! ${waveRemaining + 1} BUGS INCOMING!`;
+            messageTimer = 3.5;
+            spawnTimer = .52;
+          } else spawnTimer = 3.3;
         }
-      } else e.x -= e.speed * dt;
-      if (e.x < 105) { enemies.splice(i, 1); ended = true; won = false; }
-    }
-    if (elapsed >= 75 && !ended) { ended = true; won = true; }
-  }
-  function text(str, x, y, size, color = '#fff', align = 'left') {
-    ctx.font = `600 ${size}px system-ui, Segoe UI, sans-serif`; ctx.fillStyle = color; ctx.textAlign = align; ctx.fillText(str, x, y);
-  }
-  function bar(x, y, ratio) {
-    ctx.fillStyle = '#3b1c23'; ctx.fillRect(x - 25, y, 50, 5);
-    ctx.fillStyle = '#72dd88'; ctx.fillRect(x - 25, y, 50 * Math.max(0, Math.min(1, ratio)), 5);
-  }
-  function drawCard(y, name, cost, color, type) {
-    ctx.fillStyle = selected === type ? '#0b111b' : '#26384d'; ctx.fillRect(20, y, 100, 90);
-    ctx.strokeStyle = selected === type ? '#70e5ff' : '#496178'; ctx.lineWidth = 3; ctx.strokeRect(21.5, y + 1.5, 97, 87);
-    ctx.fillStyle = color; ctx.fillRect(28, y + 8, 84, 54);
-    text(name, 70, y + 42, 13, '#101827', 'center');
-    text(`${cost} GB`, 70, y + 80, 13, '#fff', 'center');
-  }
-  function draw() {
-    ctx.clearRect(0, 0, 1280, 720);
-    ctx.fillStyle = '#101827'; ctx.fillRect(0, 0, 1280, 720);
-    ctx.fillStyle = '#18324a'; ctx.fillRect(0, 80, 1280, 560);
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-      ctx.fillStyle = (r + c) % 2 ? '#314f50' : '#2a4c45';
-      ctx.fillRect(LEFT + c * CW, TOP + r * CH, CW, CH);
-      ctx.strokeStyle = '#92cbb044'; ctx.lineWidth = 1;
-      ctx.strokeRect(LEFT + c * CW + .5, TOP + r * CH + .5, CW, CH);
-    }
-    ctx.fillStyle = '#26384d'; ctx.fillRect(20, 20, 210, 48);
-    text(`RAM: ${ram} GB`, 35, 51, 20, '#70e5ff');
-    text(`SCORE: ${score}`, 250, 50, 20);
-    text(`SURVIVE: ${Math.min(75, elapsed).toFixed(0)} / 75s`, 480, 50, 20, '#ffcf70');
-    drawCard(120, 'COMPILER', 50, '#55b9ff', 'compiler');
-    drawCard(225, 'FIREWALL', 50, '#f49b55', 'firewall');
-    drawCard(330, 'RAM', 50, '#70e5ff', 'ram');
-
-    for (const d of defenders) {
-      if (d.type === 'compiler') {
-        ctx.fillStyle = '#55b9ff'; ctx.beginPath(); ctx.arc(d.x, d.y, 28, 0, Math.PI * 2); ctx.fill();
-        text('</>', d.x, d.y + 7, 17, '#10253a', 'center');
-      } else if (d.type === 'firewall') {
-        ctx.fillStyle = '#f49b55'; ctx.fillRect(d.x - 27, d.y - 27, 54, 54);
-        text('DEF', d.x, d.y + 7, 16, '#40220d', 'center');
-      } else {
-        ctx.fillStyle = '#70e5ff'; ctx.fillRect(d.x - 27, d.y - 27, 54, 54);
-        text('RAM', d.x, d.y + 6, 14, '#10253a', 'center');
       }
-      bar(d.x, d.y - 38, d.hp / 100);
     }
-    for (const e of enemies) {
-      const y = TOP + e.lane * CH + CH / 2;
-      ctx.fillStyle = '#ec6071'; ctx.beginPath(); ctx.arc(e.x, y, 30, 0, Math.PI * 2); ctx.fill();
-      text('BUG', e.x, y + 6, 16, '#fff', 'center'); bar(e.x, y - 40, e.hp / e.maxHp);
+    for (const u of units) {
+      if (u.type === 'ram') {
+        u.produce -= dt;
+        if (u.produce <= 0) { ram = Math.min(999, ram + 25); u.produce += 5; message = '+25 GB RAM'; messageTimer = 1.2; }
+      }
+      u.cooldown -= dt;
+      if ((u.type === 'compiler' || u.type === 'antivirus') && u.cooldown <= 0 && bugs.some(b => b.lane === u.lane && b.x > u.x)) {
+        u.cooldown = u.type === 'compiler' ? .9 : .55;
+        shots.push({x:u.x+25, lane:u.lane, damage:u.type === 'compiler' ? 25 : 18, color:u.type === 'compiler' ? '#b9f4ff' : '#9dff75'});
+      }
+      if (u.type === 'patch' && u.cooldown <= 0) {
+        const target = units.find(other => other !== u && other.lane === u.lane && other.hp < 100 && Math.abs(other.x-u.x) < 150);
+        if (target) { target.hp = Math.min(100, target.hp + 8); u.cooldown = 1.2; }
+      }
     }
-    for (const s of shots) {
-      ctx.fillStyle = '#f2f7aa'; ctx.beginPath(); ctx.arc(s.x, TOP + s.lane * CH + CH / 2, 7, 0, Math.PI * 2); ctx.fill();
+    for (let i=shots.length-1;i>=0;i--) {
+      const s=shots[i]; s.x += 350*dt;
+      const b=bugs.find(enemy=>enemy.lane===s.lane && Math.abs(enemy.x-s.x)<enemy.radius+7);
+      if (b) { b.hp-=s.damage; shots.splice(i,1); if(b.hp<=0){bugs.splice(bugs.indexOf(b),1);kills++;} }
+      else if(s.x>1280) shots.splice(i,1);
     }
-    if (ended) {
-      ctx.fillStyle = '#101827ee'; ctx.fillRect(390, 260, 500, 200);
-      text(won ? 'SYSTEM SECURED!' : 'SYSTEM CRASHED', 640, 330, 36, won ? '#70e5ff' : '#ff7777', 'center');
-      text(`Score: ${score}`, 640, 375, 24, '#fff', 'center');
-      text('Click to restart', 640, 420, 18, '#b4c0cc', 'center');
+    for(let i=bugs.length-1;i>=0;i--){
+      const b=bugs[i]; b.attack-=dt;
+      const target=units.find(u=>u.lane===b.lane && u.type!=='ram' && Math.abs(u.x-b.x)<b.radius+22);
+      if(target){if(b.attack<=0){b.attack=.8;target.hp-=b.damage;if(target.hp<=0){board[target.lane][target.col]=null;units.splice(units.indexOf(target),1);}}}
+      else b.x-=b.speed*dt;
+      if(b.x<LEFT-30){ended=true;won=false;message='A BUG REACHED THE CPU!';}
     }
+    if(kills>=GOAL && bugs.length===0){ended=true;won=true;}
   }
-  function frame(now) {
-    const dt = Math.min((now - lastTime) / 1000, .05); lastTime = now;
-    update(dt); draw(); requestAnimationFrame(frame);
+  function text(str,x,y,size,color='#fff',align='left'){ctx.font=`700 ${size}px system-ui, sans-serif`;ctx.fillStyle=color;ctx.textAlign=align;ctx.fillText(str,x,y);}
+  function rounded(x,y,w,h,r,color){ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();}
+  function drawBoard(){
+    ctx.fillStyle='#080e18';ctx.fillRect(0,0,1280,720);
+    // PC chassis / motherboard frame
+    rounded(10,8,1260,704,24,'#1b2735');rounded(19,17,1242,686,18,'#0c1420');
+    rounded(232,88,1020,548,20,'#253446');rounded(242,98,1000,528,14,'#102b36');
+    // PCB traces
+    ctx.strokeStyle='#1f6970';ctx.lineWidth=3;
+    for(let i=0;i<8;i++){const y=108+i*68;ctx.beginPath();ctx.moveTo(251,y);ctx.lineTo(269,y);ctx.lineTo(269,y+22);ctx.lineTo(1230,y+22);ctx.stroke();}
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+      const x=LEFT+c*CW,y=TOP+r*CH;
+      ctx.fillStyle=(r+c)%2?'#193f45':'#1d4b4c';ctx.fillRect(x+2,y+2,CW-4,CH-4);
+      ctx.strokeStyle='#64b6a633';ctx.lineWidth=1;ctx.strokeRect(x+2.5,y+2.5,CW-5,CH-5);
+      // little motherboard vias
+      ctx.fillStyle='#72c9ae55';ctx.beginPath();ctx.arc(x+10,y+10,2,0,Math.PI*2);ctx.fill();
+    }
+    rounded(20,20,196,48,10,'#26384d');text(`RAM  ${ram} GB`,34,51,21,'#70e5ff');
+    text(`BUGS DEFEATED  ${kills}/${GOAL}`,250,53,19,'#ecf6ff');
+    text(`WAVE ${Math.min(waveIndex+1,4)}`,600,53,19,'#ffcf70');
+    // decorative CPU and fan on left panel
+    rounded(25,78,185,532,14,'#152130');
+    rounded(55,606,130,24,7,'#374b5e');text('CPU  /  CODE DEFENSE',120,623,11,'#8da9bc','center');
   }
-  canvas.addEventListener('pointerdown', event => {
-    const rect = canvas.getBoundingClientRect();
-    const x = (event.clientX - rect.left) * canvas.width / rect.width;
-    const y = (event.clientY - rect.top) * canvas.height / rect.height;
-    if (ended) { reset(); return; }
-    if (x >= 20 && x <= 120 && y >= 120 && y <= 210) { selected = 'compiler'; return; }
-    if (x >= 20 && x <= 120 && y >= 225 && y <= 315) { selected = 'firewall'; return; }
-    if (x >= 20 && x <= 120 && y >= 330 && y <= 420) { selected = 'ram'; return; }
-    if (!selected) return;
-    const col = Math.floor((x - LEFT) / CW), row = Math.floor((y - TOP) / CH);
-    if (row < 0 || row >= ROWS || col < 0 || col >= COLS || board[row][col]) return;
-    const cost = 50;
-    if (ram < cost) return;
-    ram -= cost;
-    const d = {x: LEFT + col * CW + CW / 2, y: TOP + row * CH + CH / 2, lane: row, col, type: selected, hp: 100, cooldown: .2, produceTimer: 15};
-    defenders.push(d); board[row][col] = selected; selected = null;
+  function drawCard(card){
+    rounded(30,card.y,176,82,12,selected===card.type?'#324d61':'#202f40');
+    ctx.strokeStyle=selected===card.type?card.color:'#40566b';ctx.lineWidth=selected===card.type?3:1.5;ctx.strokeRect(31,card.y+1,174,80);
+    rounded(41,card.y+10,54,54,10,card.color);
+    if(card.type==='compiler'){text('</>',68,card.y+43,19,'#10253a','center');}
+    else if(card.type==='firewall'){ctx.fillStyle='#a7501d';ctx.fillRect(51,card.y+20,34,8);ctx.fillRect(51,card.y+35,34,8);}
+    else if(card.type==='ram'){text('RAM',68,card.y+41,13,'#10253a','center');}
+    else if(card.type==='antivirus'){text('AV',68,card.y+43,18,'#16351b','center');}
+    else{text('+',68,card.y+45,28,'#351c45','center');}
+    text(card.name,107,card.y+31,13,'#eaf3ff');text(`${card.cost} GB`,107,card.y+55,13,'#8feaff');
+  }
+  function drawUnit(u){
+    const x=u.x,y=u.y;
+    if(u.type==='compiler'){
+      ctx.fillStyle='#55b9ff';ctx.beginPath();ctx.arc(x,y,27,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#d9f6ff';ctx.fillRect(x-16,y-13,32,5);ctx.fillRect(x-16,y-4,23,5);ctx.fillRect(x-16,y+5,28,5);
+      text('</>',x,y+24,12,'#10253a','center');
+    }else if(u.type==='firewall'){
+      rounded(x-27,y-27,54,54,6,'#f49b55');ctx.fillStyle='#8c4825';ctx.fillRect(x-22,y-15,44,7);ctx.fillRect(x-22,y+1,44,7);ctx.fillRect(x-22,y+17,44,7);
+    }else if(u.type==='ram'){
+      rounded(x-28,y-25,56,50,6,'#70e5ff');ctx.fillStyle='#14617a';ctx.fillRect(x-21,y-17,42,23);
+      for(let k=-15;k<=15;k+=10){ctx.fillStyle='#baf7ff';ctx.fillRect(x+k,y-12,5,12);}
+      text('RAM +25',x,y+20,9,'#10253a','center');
+    }else if(u.type==='antivirus'){
+      ctx.fillStyle='#8de072';ctx.beginPath();ctx.moveTo(x,y-30);ctx.lineTo(x+27,y-17);ctx.lineTo(x+22,y+13);ctx.lineTo(x,y+29);ctx.lineTo(x-22,y+13);ctx.lineTo(x-27,y-17);ctx.closePath();ctx.fill();
+      text('AV',x,y+7,17,'#17341c','center');
+    }else{
+      ctx.fillStyle='#d58bff';ctx.beginPath();ctx.arc(x,y,27,0,Math.PI*2);ctx.fill();
+      text('+',x,y+10,31,'#351c45','center');
+    }
+    ctx.fillStyle='#421e29';ctx.fillRect(x-24,y-37,48,5);ctx.fillStyle='#72dd88';ctx.fillRect(x-24,y-37,48*Math.max(0,u.hp/100),5);
+  }
+  function drawBug(b){
+    const y=TOP+b.lane*CH+CH/2,x=b.x,r=b.radius;
+    ctx.fillStyle=b.color;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+    // little legs and eyes make distinct, readable bug models
+    ctx.strokeStyle=b.color;ctx.lineWidth=4;
+    for(const side of [-1,1])for(let n=-1;n<=1;n++){ctx.beginPath();ctx.moveTo(x+side*(r-3),y+n*9);ctx.lineTo(x+side*(r+8),y+n*14);ctx.stroke();}
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x-7,y-5,4,0,Math.PI*2);ctx.arc(x+7,y-5,4,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#19202b';ctx.beginPath();ctx.arc(x-7,y-5,1.8,0,Math.PI*2);ctx.arc(x+7,y-5,1.8,0,Math.PI*2);ctx.fill();
+    text(b.label,x,y+r+16,9,'#fff','center');
+    ctx.fillStyle='#3b1c23';ctx.fillRect(x-24,y-r-10,48,4);ctx.fillStyle='#ff7777';ctx.fillRect(x-24,y-r-10,48*Math.max(0,b.hp/b.maxHp),4);
+  }
+  function draw(){
+    drawBoard();CARDS.forEach(drawCard);
+    for(const u of units)drawUnit(u);
+    for(const b of bugs)drawBug(b);
+    for(const s of shots){ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(s.x,TOP+s.lane*CH+CH/2,7,0,Math.PI*2);ctx.fill();}
+    if(messageTimer>0&&!ended){rounded(440,78,420,32,10,'#0a111ddd');text(message,650,100,15,'#ffdc76','center');}
+    if(ended){rounded(360,250,560,220,18,'#07101aee');text(won?'PC SECURED!':'SYSTEM CRASHED',640,325,38,won?'#70e5ff':'#ff7777','center');text(`Bugs defeated: ${kills} / ${GOAL}`,640,370,23,'#fff','center');text(won?'All waves cleared!':'A bug got through the defenses.',640,405,16,'#b4c0cc','center');text('Tap to restart',640,442,16,'#70e5ff','center');}
+  }
+  function frame(now){const dt=Math.min((now-lastTime)/1000,.05);lastTime=now;update(dt);draw();requestAnimationFrame(frame);}
+  canvas.addEventListener('pointerdown',event=>{
+    const rect=canvas.getBoundingClientRect(),x=(event.clientX-rect.left)*canvas.width/rect.width,y=(event.clientY-rect.top)*canvas.height/rect.height;
+    if(ended){reset();return;}
+    for(const card of CARDS){if(x>=30&&x<=206&&y>=card.y&&y<=card.y+82){selected=card.type;return;}}
+    if(!selected)return;
+    const col=Math.floor((x-LEFT)/CW),row=Math.floor((y-TOP)/CH);
+    if(row<0||row>=ROWS||col<0||col>=COLS||board[row][col])return;
+    const card=CARDS.find(item=>item.type===selected);if(ram<card.cost)return;
+    ram-=card.cost;
+    const unit={x:LEFT+col*CW+CW/2,y:TOP+row*CH+CH/2,lane:row,col,type:selected,hp:100,cooldown:.2,produce:5};
+    units.push(unit);board[row][col]=selected;selected=null;
   });
-  reset(); requestAnimationFrame(frame);
+  reset();requestAnimationFrame(frame);
 })();
 </script>
 </body>
