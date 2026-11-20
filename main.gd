@@ -12,13 +12,13 @@ var defenders: Array = []
 var enemies: Array = []
 var projectiles: Array = []
 
-var credits := 150
+var ram := 50
 var score := 0
 var selected_type := ""
 var game_over := false
 var victory := false
 var elapsed := 0.0
-var credit_timer := 0.0
+var ram_timer := 0.0
 var spawn_timer := 3.0
 var spawn_index := 0
 
@@ -33,12 +33,12 @@ func _process(delta: float) -> void:
 		return
 
 	elapsed += delta
-	credit_timer += delta
+	ram_timer += delta
 	spawn_timer -= delta
 
-	if credit_timer >= 5.0:
-		credit_timer = 0.0
-		credits = min(999, credits + 25)
+	if ram_timer >= 10.0:
+		ram_timer -= 10.0
+		ram = min(999, ram + 50)
 
 	if spawn_timer <= 0.0:
 		spawn_enemy()
@@ -62,7 +62,7 @@ func _process(delta: float) -> void:
 		var hit := false
 		for j in range(enemies.size() - 1, -1, -1):
 			var enemy = enemies[j]
-			if int(enemy["lane"]) == int(projectile["lane"]) and abs(enemy["x"] - projectile["x"] ) < 25.0:
+			if int(enemy["lane"]) == int(projectile["lane"]) and abs(enemy["x"] - projectile["x"]) < 25.0:
 				enemy["health"] -= projectile["damage"]
 				projectiles.remove_at(i)
 				hit = true
@@ -82,7 +82,7 @@ func _process(delta: float) -> void:
 
 		for j in range(defenders.size() - 1, -1, -1):
 			var defender = defenders[j]
-			if int(defender["lane"]) == int(enemy["lane"]) and abs(defender["x"] - enemy["x"] ) < 42.0:
+			if int(defender["lane"]) == int(enemy["lane"]) and abs(defender["x"] - enemy["x"]) < 42.0:
 				enemy_attacking = true
 				if enemy["attack_timer"] <= 0.0:
 					enemy["attack_timer"] = 0.9
@@ -140,11 +140,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if cells[row][col] != null:
 			return
 
-		var cost := 50 if selected_type == "compiler" else 75
-		if credits < cost:
+		const UNIT_COST := 50
+		if ram < UNIT_COST:
 			return
 
-		credits -= cost
+		ram -= UNIT_COST
 		var x := GRID_LEFT + col * CELL_W + CELL_W * 0.5
 		var y := GRID_TOP + row * CELL_H + CELL_H * 0.5
 		defenders.append({"x": x, "y": y, "lane": row, "col": col, "type": selected_type, "health": 100.0, "cooldown": 0.2})
@@ -160,13 +160,13 @@ func _restart() -> void:
 	defenders.clear()
 	enemies.clear()
 	projectiles.clear()
-	credits = 150
+	ram = 50
 	score = 0
 	selected_type = ""
 	game_over = false
 	victory = false
 	elapsed = 0.0
-	credit_timer = 0.0
+	ram_timer = 0.0
 	spawn_timer = 3.0
 	spawn_index = 0
 
@@ -181,14 +181,13 @@ func _draw() -> void:
 			draw_rect(rect, color)
 			draw_rect(rect, Color("92cbb0", 0.22), false, 1.0)
 
-	# Resource panel and cards
 	draw_rect(Rect2(20, 20, 210, 48), Color("26384d"))
-	draw_string(ThemeDB.fallback_font, Vector2(35, 51), "CYCLES: %d" % credits, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("70e5ff"))
+	draw_string(ThemeDB.fallback_font, Vector2(35, 51), "RAM: %d GB" % ram, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("70e5ff"))
 	draw_string(ThemeDB.fallback_font, Vector2(250, 50), "SCORE: %d" % score, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color.WHITE)
 	draw_string(ThemeDB.fallback_font, Vector2(480, 50), "SURVIVE: %.0f / 75s" % elapsed, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("ffcf70"))
 
 	_draw_card(20, 120, "COMPILER", 50, Color("55b9ff"), selected_type == "compiler")
-	_draw_card(20, 225, "FIREWALL", 75, Color("f49b55"), selected_type == "firewall")
+	_draw_card(20, 225, "FIREWALL", 50, Color("f49b55"), selected_type == "firewall")
 
 	for defender in defenders:
 		if defender["type"] == "compiler":
@@ -218,7 +217,7 @@ func _draw_card(x: float, y: float, label: String, cost: int, color: Color, sele
 	draw_rect(Rect2(x, y, 100, 90), Color("0b111b") if selected else Color("26384d"))
 	draw_rect(Rect2(x + 8, y + 8, 84, 54), color)
 	draw_string(ThemeDB.fallback_font, Vector2(x + 14, y + 40), label.left(7), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("101827"))
-	draw_string(ThemeDB.fallback_font, Vector2(x + 28, y + 78), "%d cycles" % cost, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color.WHITE)
+	draw_string(ThemeDB.fallback_font, Vector2(x + 28, y + 78), "%d GB" % cost, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color.WHITE)
 
 func _draw_health_bar(x: float, y: float, ratio: float) -> void:
 	draw_rect(Rect2(x - 25.0, y, 50.0, 5.0), Color("3b1c23"))
