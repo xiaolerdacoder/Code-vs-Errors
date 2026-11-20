@@ -20,7 +20,7 @@
   <h1>Code vs Errors</h1>
   <p>Defend your codebase! Choose a unit card, then click an empty tile to place it.</p>
   <canvas id="game" width="1280" height="720" aria-label="Code vs Errors game"></canvas>
-  <p class="hint">Compilers shoot bugs in their lane. Firewalls block them. Start with 50 GB RAM; gain 50 GB every 10 seconds. Each unit costs 50 GB. Survive 75 seconds to win. Click after the game ends to restart.</p>
+  <p class="hint">Compilers shoot bugs in their lane. Firewalls block them. Start with 50 GB RAM; gain 25 GB every 15 seconds. Each unit costs 50 GB. Survive 75 seconds to win. Click after the game ends to restart.</p>
 </main>
 <script>
 (() => {
@@ -44,7 +44,7 @@
   function update(dt) {
     if (ended) return;
     elapsed += dt; ramTimer += dt; spawnTimer -= dt;
-    if (ramTimer >= 10) { ramTimer -= 10; ram = Math.min(999, ram + 50); }
+    if (ramTimer >= 15) { ramTimer -= 15; ram = Math.min(999, ram + 25); }
     if (spawnTimer <= 0) { spawnEnemy(); spawnTimer = Math.max(.8, 2.8 - elapsed * .018); }
 
     for (const d of defenders) {
