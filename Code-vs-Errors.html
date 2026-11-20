@@ -20,7 +20,7 @@
   <h1>Code vs Errors</h1>
   <p>Defend your codebase! Choose a unit card, then click an empty tile to place it.</p>
   <canvas id="game" width="1280" height="720" aria-label="Code vs Errors game"></canvas>
-  <p class="hint">Compilers shoot bugs in their lane. Firewalls block them. Survive 75 seconds to win. Click after the game ends to restart.</p>
+  <p class="hint">Compilers shoot bugs in their lane. Firewalls block them. Start with 50 GB RAM; gain 50 GB every 10 seconds. Each unit costs 50 GB. Survive 75 seconds to win. Click after the game ends to restart.</p>
 </main>
 <script>
 (() => {
@@ -28,12 +28,12 @@
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const ROWS = 5, COLS = 9, LEFT = 250, TOP = 120, CW = 105, CH = 100;
-  let board, defenders, enemies, shots, credits, score, selected, elapsed, incomeTimer, spawnTimer, ended, won, lastTime;
+  let board, defenders, enemies, shots, ram, score, selected, elapsed, ramTimer, spawnTimer, ended, won, lastTime;
 
   function reset() {
     board = Array.from({length: ROWS}, () => Array(COLS).fill(null));
     defenders = []; enemies = []; shots = [];
-    credits = 150; score = 0; selected = null; elapsed = 0; incomeTimer = 0; spawnTimer = 3;
+    ram = 50; score = 0; selected = null; elapsed = 0; ramTimer = 0; spawnTimer = 3;
     ended = false; won = false; lastTime = performance.now();
   }
   function spawnEnemy() {
@@ -43,8 +43,8 @@
   }
   function update(dt) {
     if (ended) return;
-    elapsed += dt; incomeTimer += dt; spawnTimer -= dt;
-    if (incomeTimer >= 5) { incomeTimer -= 5; credits = Math.min(999, credits + 25); }
+    elapsed += dt; ramTimer += dt; spawnTimer -= dt;
+    if (ramTimer >= 10) { ramTimer -= 10; ram = Math.min(999, ram + 50); }
     if (spawnTimer <= 0) { spawnEnemy(); spawnTimer = Math.max(.8, 2.8 - elapsed * .018); }
 
     for (const d of defenders) {
@@ -87,7 +87,7 @@
     ctx.strokeStyle = selected === type ? '#70e5ff' : '#496178'; ctx.lineWidth = 3; ctx.strokeRect(21.5, y + 1.5, 97, 87);
     ctx.fillStyle = color; ctx.fillRect(28, y + 8, 84, 54);
     text(name, 70, y + 42, 13, '#101827', 'center');
-    text(`${cost} cycles`, 70, y + 80, 13, '#fff', 'center');
+    text(`${cost} GB`, 70, y + 80, 13, '#fff', 'center');
   }
   function draw() {
     ctx.clearRect(0, 0, 1280, 720);
@@ -100,11 +100,11 @@
       ctx.strokeRect(LEFT + c * CW + .5, TOP + r * CH + .5, CW, CH);
     }
     ctx.fillStyle = '#26384d'; ctx.fillRect(20, 20, 210, 48);
-    text(`CYCLES: ${credits}`, 35, 51, 20, '#70e5ff');
+    text(`RAM: ${ram} GB`, 35, 51, 20, '#70e5ff');
     text(`SCORE: ${score}`, 250, 50, 20);
     text(`SURVIVE: ${Math.min(75, elapsed).toFixed(0)} / 75s`, 480, 50, 20, '#ffcf70');
     drawCard(120, 'COMPILER', 50, '#55b9ff', 'compiler');
-    drawCard(225, 'FIREWALL', 75, '#f49b55', 'firewall');
+    drawCard(225, 'FIREWALL', 50, '#f49b55', 'firewall');
 
     for (const d of defenders) {
       if (d.type === 'compiler') {
@@ -145,9 +145,9 @@
     if (!selected) return;
     const col = Math.floor((x - LEFT) / CW), row = Math.floor((y - TOP) / CH);
     if (row < 0 || row >= ROWS || col < 0 || col >= COLS || board[row][col]) return;
-    const cost = selected === 'compiler' ? 50 : 75;
-    if (credits < cost) return;
-    credits -= cost;
+    const cost = 50;
+    if (ram < cost) return;
+    ram -= cost;
     const d = {x: LEFT + col * CW + CW / 2, y: TOP + row * CH + CH / 2, lane: row, col, type: selected, hp: 100, cooldown: .2};
     defenders.push(d); board[row][col] = selected; selected = null;
   });
